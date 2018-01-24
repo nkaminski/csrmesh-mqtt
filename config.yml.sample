@@ -1,0 +1,11 @@
+mqtt:
+        host: '127.0.0.1'
+        port: 1883
+        user: 'mqtt'
+        pass: 'password'
+        basetopic: 'csrmesh/'
+
+csrmesh:
+        pin: 1234
+        mac_list:
+            - 'FE:ED:DE:AD:BE:EF'
