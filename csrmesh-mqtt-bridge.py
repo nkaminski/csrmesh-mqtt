@@ -1,9 +1,8 @@
-#!/usr/bin/python3
-
 from multiprocessing import Process, Queue, Value
 from yaml import load
 import queue
 import time
+import sys
 
 def mqtt_proc(q, mqtt_basetopic, mqtt_host, mqtt_port, mqtt_user, mqtt_pass):
     import paho.mqtt.client as mqtt
@@ -11,6 +10,7 @@ def mqtt_proc(q, mqtt_basetopic, mqtt_host, mqtt_port, mqtt_user, mqtt_pass):
     def on_connect(mqttc, obj, flags, rc):
         if rc == 0:
             print("[+] MQTT connection successful")
+            mqttc.subscribe("%s#" % (mqtt_basetopic,), 0)
         else:
             print("[-] MQTT connection failed: "+mqtt.connack_string(rc))
             time.sleep(5.0)
@@ -38,16 +38,20 @@ def mqtt_proc(q, mqtt_basetopic, mqtt_host, mqtt_port, mqtt_user, mqtt_pass):
             q.put_nowait((objid,value))
         except queue.Full:
             print("[-] Message queue full, discarding message!")
-
     mqttc = mqtt.Client()
     if mqtt_user and mqtt_pass:
         mqttc.username_pw_set(mqtt_user, mqtt_pass)
     mqttc.on_message = on_message
     mqttc.on_connect = on_connect
     mqttc.on_subscribe = on_subscribe
-    mqttc.connect(mqtt_host, mqtt_port, 60)
-    mqttc.subscribe("%s#" % (mqtt_basetopic,), 0)
-    mqttc.loop_forever()
+
+    while(True):
+        try:
+            mqttc.connect(mqtt_host, mqtt_port, 60)
+            mqttc.loop_forever(retry_first_connection=True)
+        except OSError:
+            print("[-] OSError during MQTT connection, retrying in 10 sec.")
+            time.sleep(10.0)
 
 def csrmesh_proc(q, wdt_val, pin, mac_list):
     import csrmesh as cm
@@ -89,7 +93,9 @@ def csrmesh_proc(q, wdt_val, pin, mac_list):
 if __name__== '__main__':
     conf = None
     #Load config file
-    with open("config.yml",'r') as f:
+    if len(sys.argv) != 2:
+       print("Usage: %s <config file>" % sys.argv[0])
+    with open(sys.argv[1],'r') as f:
         conf = load(f)
     #Forever
     while(1):
